@@ -83,7 +83,7 @@ function NightSentence({ words, slotA, slotB, initDelay }) {
         animationDuration: `${dur}s`,
         animationDelay: `${initDelay}s`,
         animationTimingFunction: 'ease-in-out',
-        animationFillMode: 'forwards',
+        animationFillMode: 'both',
         pointerEvents: 'none',
         zIndex: 105,
         display: 'flex',
