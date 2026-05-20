@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import Bottle from './components/Bottle'
 import StarryNight from './components/StarryNight'
 import WordBubbles, { CAT } from './components/WordBubbles'
 import luballyUrl from './audio/lubally.mp3'
+import angelUrl from '../assets/angel.png'
 
 const randomBetween = (min, max) => min + Math.random() * (max - min)
 
@@ -111,6 +112,66 @@ function NightSentence({ words, slotA, slotB, initDelay }) {
   )
 }
 
+// ─── Falling unicode stars ────────────────────────────────────────────────────
+const UNICODE_FALL_CHARS = ['✦', '✧', '✩', '★', '⋆', '✫', '✬', '✭', '✯', '✰', '·', '✦', '✧', '✩']
+const FALL_STARS = Array.from({ length: 55 }, (_, i) => ({
+  id:     i,
+  char:   UNICODE_FALL_CHARS[i % UNICODE_FALL_CHARS.length],
+  left:   (i * 37.3 + 11.7) % 100,
+  startY: (i * 61.8 + 5.3)  % 100,
+  size:   i % 9 === 0 ? 1.3 + (i % 3) * 0.3   // big bright ones
+                      : 0.5 + (i % 5) * 0.18, // rem
+  dur:    1.8 + (i % 9) * 0.42,
+  delay:  -((i * 0.97) % 7),
+  opacity: 0.3 + (i % 7) * 0.1,
+  bright: i % 9 === 0,
+}))
+
+function FallingStars() {
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 3 }}>
+      <style>{`
+        @keyframes starFall {
+          0%   { transform: translateY(0);      opacity: 0; }
+          7%   { opacity: 1; }
+          88%  { opacity: 1; }
+          100% { transform: translateY(-110vh); opacity: 0; }
+        }
+        @keyframes angelFloat {
+          0%,100% { transform: translateY(0px) rotate(-4deg); }
+          50%     { transform: translateY(-18px) rotate(2deg); }
+        }
+        @keyframes angelStarRise {
+          0%   { transform: translateY(0) scale(0.5);    opacity: 0; }
+          18%  { opacity: 1; }
+          100% { transform: translateY(-140px) scale(1); opacity: 0; }
+        }
+      `}</style>
+      {FALL_STARS.map(s => (
+        <span
+          key={s.id}
+          style={{
+            position:   'absolute',
+            left:       `${s.left}%`,
+            top:        `${s.startY}%`,
+            fontSize:   `${s.size}rem`,
+            color:      s.bright ? 'rgba(255,248,210,0.95)' : `rgba(200,220,255,${s.opacity})`,
+            textShadow: s.bright
+              ? `0 0 12px rgba(255,235,160,0.9), 0 0 28px rgba(255,210,100,0.5)`
+              : `0 0 6px rgba(180,210,255,${s.opacity * 0.8})`,
+            animation:  `starFall ${s.dur}s linear ${s.delay}s infinite`,
+            willChange: 'transform, opacity',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+        >
+          {s.char}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function App() {
   const [flyingWords, setFlyingWords] = useState([])
   const [bottleSentences, setBottleSentences] = useState([])  // array of word[]
@@ -124,6 +185,23 @@ export default function App() {
   const bottleActive = bottleSentences.length > 0
   const messageCount = bottleSentences.length
   const bottleFull   = bottleSentences.length >= 6
+
+  // Track actual bottle-element centre so orbs orbit the real visual centre
+  const [bottleCenter, setBottleCenter] = useState({ x: 50, y: 50 })
+  const measureBottle = useCallback(() => {
+    const el = bottleRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setBottleCenter({
+      x: (r.left + r.width  * 0.5) / window.innerWidth  * 100,
+      y: (r.top  + r.height * 0.5) / window.innerHeight * 100,
+    })
+  }, [])
+  useLayoutEffect(() => {
+    measureBottle()
+    window.addEventListener('resize', measureBottle)
+    return () => window.removeEventListener('resize', measureBottle)
+  }, [measureBottle])
 
   useEffect(() => () => {
     timeoutRef.current.forEach(window.clearTimeout)
@@ -197,22 +275,58 @@ export default function App() {
           >
             {/* Deep night sky */}
             <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 38% 22%, rgba(22,12,68,1) 0%, rgba(8,5,30,1) 55%, rgba(2,2,14,1) 100%)' }} />
+            {/* Stars falling past you as you plummet through space */}
+            <FallingStars />
             <StarryNight active={true} seed={starSeed} />
             {/* Aurora shimmer */}
             <div className="absolute bottom-0 left-0 right-0 h-44 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(80,40,160,0.35), rgba(40,160,140,0.14), transparent)' }} />
             {/* Moon glow */}
             <div className="absolute pointer-events-none" style={{ top: '6%', right: '10%', width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,248,210,0.22) 0%, rgba(255,230,130,0.08) 50%, transparent 70%)', filter: 'blur(18px)' }} />
+            {/* Angel — truly centred; positioning and animation are split across two divs
+                 so angelFloat transform doesn't clobber translate(-50%,-50%) */}
+            <div className="absolute pointer-events-none" style={{
+              top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10,
+            }}>
+              <div style={{
+                animation: 'angelFloat 5s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 32px rgba(255,235,180,0.6)) drop-shadow(0 0 70px rgba(200,170,255,0.35))',
+              }}>
+                <img src={angelUrl} alt="" style={{ width: 260, opacity: 0.92, userSelect: 'none', display: 'block' }} />
+              </div>
+            </div>
 
-            {/* Floating bottle sentences */}
-            {bottleSentences.map((sentence, i) => (
-              <NightSentence
-                key={`night-sentence-${i}`}
-                words={sentence}
-                slotA={nightSlots[i]}
-                slotB={nightSlots[i + bottleSentences.length]}
-                initDelay={0.3 + i * 2.8}
-              />
-            ))}
+            {/* Rising stars from angel — positioned at screen centre, float upward */}
+            <div className="absolute pointer-events-none" style={{ inset: 0, zIndex: 11 }}>
+              {[...Array(16)].map((_, i) => {
+                const chars = ['✦','✧','✩','⋆','✫','✬','✭','✯']
+                const offsetX = ((i * 43.7 + 17) % 320) - 160   // –160 to +160 px from centre
+                const startOffY = 60 + (i % 5) * 40              // 60–220 px below centre
+                const size    = 0.6 + (i % 5) * 0.2
+                const dur     = 2.0 + (i % 6) * 0.45
+                const delay   = -((i * 0.91) % 4)
+                const opacity = 0.55 + (i % 4) * 0.12
+                return (
+                  <span key={i} style={{
+                    position:   'absolute',
+                    left:       `calc(50% + ${offsetX}px)`,
+                    top:        `calc(50% + ${startOffY}px)`,
+                    fontSize:   `${size}rem`,
+                    color:      i % 6 === 0 ? 'rgba(255,248,200,0.98)' : `rgba(210,195,255,${opacity})`,
+                    textShadow: i % 6 === 0
+                      ? '0 0 12px rgba(255,230,140,1), 0 0 28px rgba(255,200,80,0.6)'
+                      : `0 0 8px rgba(190,170,255,${opacity})`,
+                    animation:  `angelStarRise ${dur}s ease-out ${delay}s infinite`,
+                    willChange: 'transform, opacity',
+                    lineHeight: 1,
+                    userSelect: 'none',
+                  }}>{chars[i % chars.length]}</span>
+                )
+              })}
+            </div>
+
+
 
             {/* Dismiss hint */}
             <motion.p
@@ -232,7 +346,7 @@ export default function App() {
       <div className="absolute inset-0 pointer-events-none grain" />
 
       {/* Word bubbles — hide when bottle is full */}
-      {!bottleFull && <WordBubbles onSend={handleBubbleSend} onNewSession={() => setStarSeed(v => v + 1)} />}
+      {!bottleFull && <WordBubbles onSend={handleBubbleSend} center={bottleCenter} onNewSession={() => setStarSeed(v => v + 1)} />}
 
       {/* Flying words — animate from bubble position to bottle */}
       <AnimatePresence>
